@@ -17,6 +17,12 @@ package com.android.internal.util.custom;
 
 import android.app.Application;
 import android.os.Build;
+import android.app.ActivityTaskManager;
+import android.app.TaskStackListener;
+import android.content.ComponentName;
+import android.content.Context;
+import android.os.Binder;
+import android.os.Process;
 import android.util.Log;
 
 import java.lang.reflect.Field;
@@ -29,7 +35,8 @@ import java.util.Map;
 public class PixelPropsUtils {
 
     private static final String TAG = PixelPropsUtils.class.getSimpleName();
-    private static final boolean DEBUG = false;
+    private static final String PROP_HOOKS = "persist.sys.pihooks_";
+    private static final boolean DEBUG = SystemProperties.getBoolean(PROP_HOOKS + "DEBUG", false);
 
     private static final Map<String, Object> propsToChangeGeneric;
     private static final Map<String, Object> propsToChangePixel5;
@@ -37,6 +44,26 @@ public class PixelPropsUtils {
     private static final Map<String, Object> propsToChangePixelXL;
     private static final Map<String, ArrayList<String>> propsToKeep;
 
+    private static Map<String, String> createMap(String... entries) {
+         Map<String, String> map = new HashMap<>();
+         for (int i = 0; i < entries.length; i += 2) {
+             map.put(entries[i], entries[i + 1]);
+         }
+         return map;
+     }
+ 
+     private static final Map<String, String> DEFAULT_VALUES = createMap(
+         "BRAND", "google",
+         "MANUFACTURER", "Google",
+         "DEVICE", "oriole",
+         "FINGERPRINT", "google/oriole_beta/oriole:15/AP41.240823.009/12329489:user/release-keys",
+         "MODEL", "Pixel 6",
+         "PRODUCT", "oriole_beta",
+         "DEVICE_INITIAL_SDK_INT", "31",
+         "SECURITY_PATCH", "2024-09-05",
+         "ID", "AP41.240823.009"
+     );
+    
     private static final String[] extraPackagesToChange = {
             "com.android.chrome",
             "com.android.vending",
@@ -237,52 +264,52 @@ public class PixelPropsUtils {
 
     private static void setPropValue(String key, Object value) {
         try {
-            if (DEBUG) Log.d(TAG, "Defining prop " + key + " to " + value.toString());
-            Field field = Build.class.getDeclaredField(key);
-            field.setAccessible(true);
-            field.set(null, value);
-            field.setAccessible(false);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
+        Field field = getBuildClassField(key);
+            if (field != null) {
+                field.setAccessible(true);
+                if (field.getType() == int.class) {
+                    if (value instanceof String) {
+                        field.set(null, Integer.parseInt((String) value));
+                    } else if (value instanceof Integer) {
+                        field.set(null, (Integer) value);
+                    }
+                } else if (field.getType() == long.class) {
+                    if (value instanceof String) {
+                        field.set(null, Long.parseLong((String) value));
+                    } else if (value instanceof Long) {
+                        field.set(null, (Long) value);
+                    }
+                } else {
+                    field.set(null, value.toString());
+                }
+                field.setAccessible(false);
+                dlog("Set prop " + key + " to " + value);
+            } else {
+                Log.e(TAG, "Field " + key + " not found in Build or Build.VERSION classes");
+            }
+        } catch (NoSuchFieldException | IllegalAccessException | IllegalArgumentException e) {
             Log.e(TAG, "Failed to set prop " + key, e);
         }
     }
-
-    private static void setVersionField(String key, Object value) {
+    
+    private static Field getBuildClassField(String key) throws NoSuchFieldException {
         try {
-            if (DEBUG) Log.d(TAG, "Defining version field " + key + " to " + value.toString());
+            Field field = Build.class.getDeclaredField(key);
+            dlog("Field " + key + " found in Build.class");
+            return field;
+        } catch (NoSuchFieldException e) {
             Field field = Build.VERSION.class.getDeclaredField(key);
-            field.setAccessible(true);
-            field.set(null, value);
-            field.setAccessible(false);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            Log.e(TAG, "Failed to set version field " + key, e);
-        }
-    }
-
-    private static void setVersionFieldString(String key, String value) {
-        try {
-            Field field = Build.VERSION.class.getDeclaredField(key);
-            field.setAccessible(true);
-            field.set(null, value);
-            field.setAccessible(false);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            Log.e(TAG, "Failed to spoof Build." + key, e);
+            dlog("Field " + key + " found in Build.VERSION.class");
+            return field;
         }
     }
 
     private static void spoofBuildGms() {
-        // Alter model name and fingerprint to NVIDIA Shield TV for avoid hardware attestation enforcement
-        setPropValue("BRAND", "google");
-        setPropValue("PRODUCT", "akita_beta");
-        setPropValue("MODEL", "Pixel 8a");
-        setPropValue("MANUFACTURER", "Google");
-        setPropValue("DEVICE", "akita");
-        setPropValue("FINGERPRINT", "google/akita_beta/akita:16/BP22.250221.010/13193326:user/release-keys");
-        setPropValue("TYPE", "user");
-        setPropValue("TAGS", "release-keys");
-        setPropValue("ID", "BP22.250221.010");
-        setVersionField("DEVICE_INITIAL_SDK_INT", "35");
-        setVersionFieldString("SECURITY_PATCH", "2025-03-05");
+        for (Map.Entry<String, String> entry : DEFAULT_VALUES.entrySet()) {
+            String propKey = PROP_HOOKS + entry.getKey();
+            String value = SystemProperties.get(propKey);
+            setPropValue(entry.getKey(), value != null && !value.isEmpty() ? value : entry.getValue());
+        }
     }
 
     private static boolean isCallerSafetyNet() {
@@ -296,5 +323,9 @@ public class PixelPropsUtils {
             Log.i(TAG, "Blocked key attestation sIsGms=" + sIsGms + " sIsFinsky=" + sIsFinsky);
             throw new UnsupportedOperationException();
         }
+    }
+    
+    private static void dlog(String msg) {
+        if (DEBUG) Log.d(TAG, msg);
     }
 }
