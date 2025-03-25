@@ -272,17 +272,16 @@ public class PixelPropsUtils {
 
     private static void spoofBuildGms() {
         // Alter model name and fingerprint to NVIDIA Shield TV for avoid hardware attestation enforcement
-        setPropValue("BRAND", "google");
-        setPropValue("PRODUCT", "akita_beta");
-        setPropValue("MODEL", "Pixel 8a");
-        setPropValue("MANUFACTURER", "Google");
-        setPropValue("DEVICE", "akita");
-        setPropValue("FINGERPRINT", "google/akita_beta/akita:16/BP22.250221.010/13193326:user/release-keys");
+        setPropValue("BRAND", "NVIDIA");
+        setPropValue("PRODUCT", "foster_e");
+        setPropValue("MODEL", "SHIELD Android TV");
+        setPropValue("MANUFACTURER", "NVIDIA");
+        setPropValue("DEVICE", "foster");
+        setPropValue("FINGERPRINT", "NVIDIA/foster_e/foster:7.0/NRD90M/2427173_1038.2788:user/release-keys");
         setPropValue("TYPE", "user");
         setPropValue("TAGS", "release-keys");
-        setPropValue("ID", "BP22.250221.010");
-        setVersionField("DEVICE_INITIAL_SDK_INT", "35");
-        setVersionFieldString("SECURITY_PATCH", "2025-03-05");
+        setVersionField("DEVICE_INITIAL_SDK_INT", Build.VERSION_CODES.N);
+        setVersionFieldString("SECURITY_PATCH", "2018-01-05");
     }
 
     private static boolean isCallerSafetyNet() {
